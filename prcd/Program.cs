@@ -1,8 +1,5 @@
 ﻿
 using System.CommandLine;
-using System.IO;
-using System.Reflection.Metadata.Ecma335;
-using System.Threading.Channels;
 
 var langsDict = new Dictionary<string, string>
 {
@@ -14,13 +11,14 @@ var langsDict = new Dictionary<string, string>
     { "typescript",".ts" },
     { "html",".html" },
     { "css",".css" },
+    { "scss",".scss" },
     { "python",".py" }
 };
 var bundleCommand = new Command("bundle", "bundle code files to a single file");
 
 //options
 var languageOption = new Option<string>("language", "A list of file extensions to include in the file")
-    .FromAmong("all", "c#", "c", "c++", "java", "javascript", "typescript", "html", "css", "python");
+    .FromAmong("all", "c#", "c", "c++", "java", "javascript", "typescript", "html", "css","scss", "python");
 languageOption.IsRequired = true;
 languageOption.AddAlias("-lang");
 languageOption.AddAlias("-l");
@@ -75,10 +73,7 @@ bundleCommand.SetHandler((output, languages, note, sort, author, remove) =>
         }
 
     });
-    Console.WriteLine("text files");
-    foreach (var item in textFiles)
-        Console.Write(item.FullName + ", ");
-    Console.WriteLine();
+    
     if (sort.Equals("kind"))
         textFiles = textFiles.OrderBy(f => f.Extension).ToList();
     else
