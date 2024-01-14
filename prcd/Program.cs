@@ -1,24 +1,11 @@
 ﻿
 using System.CommandLine;
 
-var langsDict = new Dictionary<string, string>
-{
-    { "c#",".cs" },
-    { "c",".c" },
-    { "c++",".cpp" },
-    { "java",".java" },
-    { "javascript",".js" },
-    { "typescript",".ts" },
-    { "html",".html" },
-    { "css",".css" },
-    { "scss",".scss" },
-    { "python",".py" }
-};
+
 var bundleCommand = new Command("bundle", "bundle code files to a single file");
 
 //options
-var languageOption = new Option<string>("language", "A list of file extensions to include in the file")
-    .FromAmong("all", "c#", "c", "c++", "java", "javascript", "typescript", "html", "css","scss", "python");
+var languageOption = new Option<string>("language", "A list of file extensions to include in the file");
 languageOption.IsRequired = true;
 languageOption.AddAlias("-lang");
 languageOption.AddAlias("-l");
@@ -52,35 +39,30 @@ bundleCommand.AddOption(authorOption);
 
 bundleCommand.SetHandler((output, languages, note, sort, author, remove) =>
 {
-    string[] extentions = GetExtentions(languages);
-
-    List<string> allfiles = Directory.GetDirectories(output.DirectoryName).ToList();
-
-    List<FileInfo> textFiles = new List<FileInfo>();
-    FileInfo info;
-    allfiles.ForEach(f =>
-    {
-
-        info = new FileInfo(f);
-        if (!(info.Name.Equals("bin") || info.Name.Equals("obj") || info.Name.Equals("debug") || info.Name.Equals("node_modules")))
-        {
-            Directory.GetFiles(f).ToList().ForEach(file =>
-            {
-                if (extentions.Contains(new FileInfo(file).Extension))
-                    textFiles.Add(new FileInfo(file));
-            });
-            Console.WriteLine();
-        }
-
-    });
-    
-    if (sort.Equals("kind"))
-        textFiles = textFiles.OrderBy(f => f.Extension).ToList();
-    else
-        textFiles = textFiles.OrderBy(f => f.Name).ToList();
     try
     {
         var bundleFile = File.CreateText(output.FullName);
+        string[]? extentions = GetExtentions(languages);
+
+        List<string> allfiles = Directory.GetDirectories(Directory.GetCurrentDirectory(), "*", SearchOption.AllDirectories)
+        .Where(f => !(f.Contains(@"\obj\") || f.Contains(@"\bin\") || f.Contains(@"\Debug\") || f.Contains(@"\node_modules\"))).ToList();
+
+        List<FileInfo> textFiles = new List<FileInfo>();
+        FileInfo info;
+        allfiles.ForEach(f =>
+        {
+            info = new FileInfo(f);
+            Directory.GetFiles(f).ToList().ForEach(file =>
+            {
+                if (extentions == null || extentions.Contains(new FileInfo(file).Extension))
+                    textFiles.Add(new FileInfo(file));
+            });
+        });
+
+        if (sort.Equals("kind"))
+            textFiles = textFiles.OrderBy(f => f.Extension).ToList();
+        else
+            textFiles = textFiles.OrderBy(f => f.Name).ToList();
         Console.WriteLine($"file {output.Name} was created in {output.DirectoryName}");
         bundleFile.WriteLine(author);
         textFiles.ForEach(fi =>
@@ -109,30 +91,35 @@ var createRspCommand = new Command("create-rsp", "create respond file for bundle
 
 createRspCommand.SetHandler(() =>
 {
+    string name;
+    Console.WriteLine("enter name for rsp file");
+    name = Console.ReadLine();
     string output;
     Console.WriteLine("enter path and file name: ");
     output = Console.ReadLine();
-    string languages = "", answer = "";
+    string answer = "";
+    List<string> extensions = new List<string>();
     while (!answer.Equals("y") && !answer.Equals("n") && !answer.Equals("Y") && !answer.Equals("N"))
     {
         Console.WriteLine("Are you interested in including code files in all languages? (y/n)");
         answer = Console.ReadLine();
     }
     if (answer.Equals("n") || answer.Equals("N"))
-        foreach (var item in langsDict.Keys)
+    {
+        Console.WriteLine("enter list of extensions you want to include in the bundle file. to end press END");
+        while (!answer.Equals("END"))
         {
-            while (!answer.Equals("y") && !answer.Equals("n") && !answer.Equals("Y") && !answer.Equals("N"))
-            {
-                Console.WriteLine("Are you interested in including code files in all languages?");
-                answer = Console.ReadLine();
-            }
-            if (answer.Equals("y") || answer.Equals("Y"))
-                languages += (" " + answer);
+            answer = Console.ReadLine();
+            if (answer[0] == '.')
+                extensions.Add(answer);
+            else Console.WriteLine(answer + " is invalid extension");
         }
+    }
+
     string note = "";
     while (!note.Equals("y") && !note.Equals("n") && !note.Equals("Y") && !note.Equals("N"))
     {
-        Console.WriteLine("Are you interested in listing the source code as a comment in the bundle file?");
+        Console.WriteLine("Are you interested in listing the source code as a comment in the bundle file? (y/n)");
         note = Console.ReadLine();
     }
     string author = "";
@@ -144,28 +131,47 @@ createRspCommand.SetHandler(() =>
     sort = Console.ReadLine().Equals("kind") ? "kind" : "name";
     Console.WriteLine("Do you want to delete empty lines? (y/n)");
     string remove = Console.ReadLine();
-    while(!remove.Equals("y") && !remove.Equals("n") && !remove.Equals("Y") && !remove.Equals("N"))
+    while (!remove.Equals("y") && !remove.Equals("n") && !remove.Equals("Y") && !remove.Equals("N"))
     {
         Console.WriteLine("Enter y/n");
         remove = Console.ReadLine();
     }
-    var file = new StreamWriter("rspFile.rsp");
+    var file = new StreamWriter($"{name}.rsp");
     file.Write("bundle ");
     file.Write("-o " + output);
-    file.Write(" -l " + languages);
+    string languages = extensions.Count() == 0 ? "all" : splitExt(extensions);
+    file.Write(" -l " + '"' + languages + '"');
     if (!author.Equals(""))
         file.Write(" -a " + author);
     if (sort.Equals("kind"))
         file.Write(" -s " + sort);
     if (note.Equals("y") || note.Equals("Y"))
-        file.Write(" -n ");
+        file.Write(" -n");
     if (remove.Equals("y") || remove.Equals("Y"))
-        file.Write(" rel ");
+        file.Write(" -rel ");
     file.Close();
 
 
 });
 
+string splitExt(List<string> extensions)
+{
+    string split = "";
+    extensions.ForEach(e => split += (' ' + e));
+    split = split.Substring(1);
+    return split;
+}
+string[]? GetExtentions(string extensions)
+{
+    if (extensions.Contains("all"))
+        return null;
+    string[] extension = extensions.Split(' ');
+    foreach (var ex in extension)
+        if (ex is not null)
+            if (ex[0] != '.')
+                Console.WriteLine(ex + " is not valid extension");
+    return extension.Where(e => e[0] == '.').ToArray();
+}
 var rootCommand = new RootCommand("root command for bundle CLI");
 
 rootCommand.AddCommand(bundleCommand);
@@ -173,12 +179,3 @@ rootCommand.AddCommand(createRspCommand);
 
 rootCommand.InvokeAsync(args);
 
-string[] GetExtentions(string languages)
-{
-    if (languages.Contains("all"))
-        return langsDict.Values.ToArray();
-    List<string> ext = new List<string>();
-    List<string> langs = languages.Split(' ').ToList();
-    langs.ForEach(l => ext.Add(langsDict[l]));
-    return ext.ToArray();
-}
